@@ -18,11 +18,9 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 
-import java.awt.Dimension;
 import java.awt.GraphicsEnvironment;
 import java.awt.HeadlessException;
 import java.awt.Rectangle;
-import java.awt.Toolkit;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
@@ -354,13 +352,21 @@ public class TestBase {
             throw new RuntimeException("Interrupted while waiting to retry browser navigation.", e);
         }
     }
-
+    //we can use driver.manage().window().maximize() for maximizing the window,
+    //but in some environments (like certain CI servers or when running headless) 
+    //it may not work as expected. In those cases, setting a specific window size that matches 
+    // common screen resolutions can help ensure the application under test is rendered correctly 
+    // and elements are interactable. By calculating the viewport size based on the actual screen 
+    // dimensions minus some offsets, we can achieve a more reliable and consistent testing en
+    // vironment across different setups.
     private Rectangle getUsableScreenBounds() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return new Rectangle(DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT);
+        }
         try {
             return GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
         } catch (HeadlessException e) {
-            Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-            return new Rectangle((int) screenSize.getWidth(), (int) screenSize.getHeight());
+            return new Rectangle(DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT);
         }
     }
 

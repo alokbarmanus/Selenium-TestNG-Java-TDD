@@ -16,84 +16,68 @@
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-        <!-- Dependency versions -->
         <selenium.version>4.43.0</selenium.version>
         <testng.version>7.8.0</testng.version>
         <aspectj.version>1.9.25.1</aspectj.version>
-        <allure.version>2.27.0</allure.version>
-        <jackson.version>2.18.2</jackson.version>
-        <poi.version>5.4.1</poi.version>
-        <extentreports.version>5.1.2</extentreports.version>
-        <slf4j.version>2.0.13</slf4j.version>
-        <logback.version>1.5.6</logback.version>
-
-        <!-- Default test environment; override with -Denv=sit or -Denv=uat -->
         <env>dev</env>
     </properties>
 
     <dependencies>
-
-        <!-- ===== Selenium WebDriver ===== -->
+        <!-- Selenium -->
         <dependency>
             <groupId>org.seleniumhq.selenium</groupId>
             <artifactId>selenium-java</artifactId>
             <version>${selenium.version}</version>
         </dependency>
 
-        <!-- ===== TestNG ===== -->
+
+
+        <!-- TestNG -->
         <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
             <version>${testng.version}</version>
         </dependency>
 
-        <!-- ===== JSON ===== -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
+            <version>2.18.2</version>
         </dependency>
 
-        <!-- ===== Excel (Apache POI) ===== -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
-            <version>${poi.version}</version>
+            <version>5.4.1</version>
         </dependency>
 
-        <!-- ===== Reporting: ExtentReports ===== -->
+        <!-- ExtentReports -->
         <dependency>
             <groupId>com.aventstack</groupId>
             <artifactId>extentreports</artifactId>
-            <version>${extentreports.version}</version>
+            <version>5.1.2</version>
         </dependency>
 
-        <!-- ===== Logging: SLF4J + Logback ===== -->
+        <!-- Logging (SLF4J + Logback) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>${slf4j.version}</version>
+            <version>2.0.13</version>
         </dependency>
+
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>${logback.version}</version>
+            <version>1.5.6</version>
         </dependency>
 
-        <!-- ===== Reporting: Allure (test scope) ===== -->
+        <!-- Allure -->
         <dependency>
             <groupId>io.qameta.allure</groupId>
             <artifactId>allure-testng</artifactId>
-            <version>${allure.version}</version>
+            <version>2.27.0</version>
             <scope>test</scope>
         </dependency>
-
-        <!--
-            AspectJ Weaver — must also be loaded as -javaagent (see maven-surefire-plugin config).
-            Declared test-scope so it is on the test classpath; the agent jar is resolved
-            separately by maven-dependency-plugin.
-        -->
         <dependency>
             <groupId>org.aspectj</groupId>
             <artifactId>aspectjweaver</artifactId>
@@ -105,8 +89,21 @@
 
     <build>
         <plugins>
-
-            <!-- ===== Java Compiler ===== -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.5</version>
+                <configuration>
+                    <useManifestOnlyJar>false</useManifestOnlyJar>
+                    <argLine>-javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar" -Djdk.net.URLClassPath.disableClassPathURLCheck=true -Djava.awt.headless=true</argLine>
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                    </systemPropertyVariables>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/testng/testng-${env}.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -117,40 +114,12 @@
                 </configuration>
             </plugin>
 
-            <!-- ===== Surefire (TestNG runner) ===== -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.5</version>
-                <configuration>
-                    <!--
-                        forkCount=0: run tests in-process (same JVM as Maven).
-                        Surefire 3.5.5 has a fork communication protocol issue with JDK 25 on Windows
-                        where the forked JVM exits before the stdin/stdout shutdown handshake
-                        completes, causing "forked VM terminated without properly saying goodbye".
-                        Running in-process avoids all IPC entirely.
-                        Selenium tests are safe to run in-process because the browser is an
-                        external process unaffected by JVM sharing.
-                    -->
-                    <forkCount>0</forkCount>
-                    <systemPropertyVariables>
-                        <env>${env}</env>
-                        <java.awt.headless>true</java.awt.headless>
-                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
-                    </systemPropertyVariables>
-                    <suiteXmlFiles>
-                        <suiteXmlFile>src/test/resources/testng/testng-${env}.xml</suiteXmlFile>
-                    </suiteXmlFiles>
-                </configuration>
-            </plugin>
-
-            <!-- ===== Allure Report (bound to verify phase) ===== -->
             <plugin>
                 <groupId>io.qameta.allure</groupId>
                 <artifactId>allure-maven</artifactId>
                 <version>2.14.0</version>
                 <configuration>
-                    <reportVersion>${allure.version}</reportVersion>
+                    <reportVersion>2.27.0</reportVersion>
                     <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
                     <reportDirectory>${project.build.directory}/allure-report</reportDirectory>
                 </configuration>
@@ -164,7 +133,6 @@
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
     </build>
 </project>
