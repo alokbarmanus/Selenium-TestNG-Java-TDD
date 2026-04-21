@@ -133,7 +133,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           mvn -B -ntp -DskipTests verify sonar:sonar \
-            -Dsonar.projectKey=alokbarmanus \
+            -Dsonar.projectKey=alokbarmanus_Selenium-TestNG-Java-TDD \
             -Dsonar.organization=alokbarmanus \
             -Dsonar.host.url=https://sonarcloud.io
 
