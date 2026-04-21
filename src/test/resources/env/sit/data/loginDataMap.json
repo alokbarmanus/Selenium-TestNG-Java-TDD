@@ -1,0 +1,14 @@
+[
+	{
+		"loginDataAdmin": {
+			"username": "Admin",
+			"password": "admin123"
+		},
+		"addressData": {
+			"street": "123 Main St",
+			"city": "Anytown",
+			"state": "CA",
+			"zip": "12345"
+		}
+	}
+]

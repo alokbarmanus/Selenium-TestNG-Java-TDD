@@ -1,0 +1,105 @@
+pipeline {
+    agent any
+
+    triggers {
+        githubPush()
+    }
+
+    tools {
+        jdk 'JDK21'
+        maven 'Maven3'
+    }
+
+    environment {
+        CI                = 'true'
+        TEST_ENV          = 'uat'
+        JAVA_TOOL_OPTIONS = '-Dfile.encoding=UTF-8'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/alokbarmanus/Selenium-TestNG-Java-BDD.git'
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                sh 'mvn -B -ntp -DskipTests compile test-compile'
+            }
+        }
+
+        stage('Run Tests - UAT') {
+            steps {
+                sh "mvn -B -ntp test -Denv=${env.TEST_ENV} -Dheadless=true"
+            }
+            post {
+                always {
+                    junit testResults: 'target/surefire-reports/**/*.xml',
+                          allowEmptyResults: true
+
+                    script {
+                        if (fileExists('target/cucumber-reports/index.html')) {
+                            publishHTML(target: [
+                                reportName            : 'Cucumber Report',
+                                reportDir             : 'target/cucumber-reports',
+                                reportFiles           : 'index.html',
+                                keepAll               : true,
+                                alwaysLinkToLastBuild : true,
+                                allowMissing          : true
+                            ])
+                        }
+
+                        if (fileExists('target/extent-reports/TestExecutionReport.html')) {
+                            publishHTML(target: [
+                                reportName            : 'Extent Report',
+                                reportDir             : 'target/extent-reports',
+                                reportFiles           : 'TestExecutionReport.html',
+                                keepAll               : true,
+                                alwaysLinkToLastBuild : true,
+                                allowMissing          : true
+                            ])
+                        }
+
+                        if (fileExists('target/surefire-reports/Selenium-TestNG-Java-BDD/UAT_Execution.html')) {
+                            publishHTML(target: [
+                                reportName            : 'TestNG Report',
+                                reportDir             : 'target/surefire-reports/Selenium-TestNG-Java-BDD',
+                                reportFiles           : 'UAT_Execution.html',
+                                keepAll               : true,
+                                alwaysLinkToLastBuild : true,
+                                allowMissing          : true
+                            ])
+                        }
+                    }
+
+                    archiveArtifacts artifacts: '''
+                        target/surefire-reports/**,
+                        target/extent-reports/**,
+                        target/cucumber-reports/**,
+                        test-output/**
+                    ''', allowEmptyArchive: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'UAT pipeline completed successfully.'
+        }
+        failure {
+            echo 'UAT pipeline failed.'
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

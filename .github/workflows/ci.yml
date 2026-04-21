@@ -1,0 +1,248 @@
+﻿name: Java CI
+
+on:
+  push:
+    branches:
+      - "main"
+      - "develop"
+  pull_request:
+    branches:
+      - "main"
+      - "develop"
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Run TestNG Selenium suite"
+        required: false
+        default: false
+        type: boolean
+      test_env:
+        description: "Target environment"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - sit
+          - uat
+      thread_count:
+        description: "Parallel Chrome nodes / test threads"
+        required: false
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Compile
+        run: mvn -B -ntp -DskipTests compile test-compile
+
+  # ── CodeQL: Java SAST (finds injection, path traversal, etc.) ─────────────
+  codeql:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java
+          queries: security-and-quality
+
+      - name: Build for CodeQL
+        run: mvn -B -ntp -DskipTests compile test-compile
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:java"
+
+  # ── Trivy: dependency CVE scan on pom.xml ─────────────────────────────────
+  trivy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+  sonar:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: SonarCloud Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn -B -ntp -DskipTests verify sonar:sonar \
+            -Dsonar.projectKey=alokbarmanus \
+            -Dsonar.organization=alokbarmanus \
+            -Dsonar.host.url=https://sonarcloud.io
+
+  test:
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_tests == true)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Start Selenium Grid
+        env:
+          THREAD_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.thread_count || '1' }}
+        run: |
+          docker network create grid
+
+          docker run -d --name selenium-hub \
+            --network grid \
+            -p 4444:4444 \
+            selenium/hub:latest
+
+          for i in $(seq 1 $THREAD_COUNT); do
+            docker run -d --name chrome-$i \
+              --network grid \
+              --shm-size=2g \
+              -e SE_EVENT_BUS_HOST=selenium-hub \
+              -e SE_EVENT_BUS_PUBLISH_PORT=4442 \
+              -e SE_EVENT_BUS_SUBSCRIBE_PORT=4443 \
+              -e SE_NODE_SESSION_TIMEOUT=300 \
+              selenium/node-chrome:latest
+          done
+
+          echo "Waiting for $THREAD_COUNT node(s) to register..."
+          for attempt in $(seq 1 30); do
+            READY=$(curl -s http://localhost:4444/status | python3 -c "import sys,json; d=json.load(sys.stdin); print(sum(1 for n in d.get('value',{}).get('nodes',[]) if n.get('availability')=='UP'))" 2>/dev/null || echo 0)
+            if [ "$READY" -ge "$THREAD_COUNT" ]; then
+              echo "Grid ready: $READY/$THREAD_COUNT node(s) UP."
+              break
+            fi
+            echo "Attempt $attempt: $READY/$THREAD_COUNT nodes ready, waiting 5s..."
+            sleep 5
+          done
+
+      - name: Run TestNG suite
+        env:
+          THREAD_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.thread_count || '1' }}
+          TEST_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.test_env || 'dev' }}
+        run: |
+          mvn -B -ntp verify \
+            -Denv=$TEST_ENV \
+            -Dgrid.url=http://localhost:4444 \
+            -Dthread.count=$THREAD_COUNT
+
+      - name: Stop Selenium Grid
+        if: always()
+        env:
+          THREAD_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.thread_count || '1' }}
+        run: |
+          for i in $(seq 1 $THREAD_COUNT); do
+            docker stop chrome-$i || true
+          done
+          docker stop selenium-hub || true
+          docker network rm grid || true
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.event_name == 'workflow_dispatch' && inputs.test_env || 'dev' }}
+          path: |
+            target/surefire-reports/
+            target/extent-reports/
+            target/cucumber-reports/
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "${{ job.status == 'success' && ':white_check_mark:' || ':x:' }} *Java CI – Test Job ${{ job.status }}*",
+              "blocks": [
+                {
+                  "type": "section",
+                  "fields": [
+                    { "type": "mrkdwn", "text": "*Status:*\n${{ job.status }}" },
+                    { "type": "mrkdwn", "text": "*Environment:*\n${{ github.event_name == 'workflow_dispatch' && inputs.test_env || 'dev' }}" },
+                    { "type": "mrkdwn", "text": "*Branch:*\n${{ github.ref_name }}" },
+                    { "type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}" }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "View Run" },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }

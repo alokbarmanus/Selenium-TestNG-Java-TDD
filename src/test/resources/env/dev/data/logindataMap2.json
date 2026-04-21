@@ -1,0 +1,12 @@
+[
+	{
+		"loginDataLOB": {
+			"username": "LOB",
+			"password": "admin123"
+		},
+		"loginDataAdmin": {
+			"username": "Admin",
+			"password": "admin123"
+		}
+	}
+]

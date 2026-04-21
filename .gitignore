@@ -1,0 +1,56 @@
+# Build output
+/target/
+
+# Test output and reports
+/test-output/
+/surefire-reports/
+/failsafe-reports/
+/test-results/
+
+# Cucumber reports
+/cucumber-reports/
+/cucumber-html-reports/
+
+# Extent reports
+/extent-reports/
+
+# Allure results and report (generated at runtime)
+/allure-results/
+/allure-report/
+
+# Allure CLI binary (downloaded by allure-maven plugin)
+/.allure/
+
+# Logs
+/logs/
+*.log
+
+# IDE metadata
+/.idea/
+*.iml
+/.classpath
+/.project
+/.settings/
+.factorypath
+
+# VS Code: ignore local files, keep shared workspace config
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/launch.json
+!/.vscode/tasks.json
+!/.vscode/extensions.json
+.vscode/
+
+# VS Code Java Upgrade tool artifacts
+/.github/java-upgrade/
+
+# Runtime artifacts
+*.tmp
+*.class
+
+# Maven wrapper (if not committed intentionally)
+# .mvn/wrapper/maven-wrapper.jar
+
+# OS files
+.DS_Store
+Thumbs.db

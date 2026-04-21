@@ -1,0 +1,12 @@
+[
+  {
+    "username": "Admin",
+    "password": "admin123",
+    "address": {
+      "street": "456 Oak Ave",
+      "city": "Springfield",
+      "state": "IL",
+      "zip": "62701"
+    }
+  }
+]

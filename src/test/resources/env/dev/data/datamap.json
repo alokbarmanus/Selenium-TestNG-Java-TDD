@@ -1,0 +1,12 @@
+[
+	{
+		"username": "Admin",
+		"password": "admin123",
+		"address": {
+			"street": "123 Main St",
+			"city": "Anytown",
+			"state": "CA",
+			"zip": "12345"
+		}
+	}
+]

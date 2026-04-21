@@ -1,0 +1,12 @@
+[
+  {
+    "username": "Admin",
+    "password": "admin123",
+    "address": {
+      "street": "789 Pine Rd",
+      "city": "Shelbyville",
+      "state": "TN",
+      "zip": "37160"
+    }
+  }
+]
